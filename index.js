@@ -8,7 +8,6 @@ const cors = require('cors');
 // Initialize dotenv to use environment variables
 dotenv.config();
 
-
 // Create an instance of express app
 const app = express();
 
