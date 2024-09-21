@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../Models/User');
 
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 
 // Generate JWT token
@@ -48,28 +49,54 @@ exports.loginUser = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-exports.resetPassword = async (req,res) =>{
-  const {email,password} = req.body
 
+//check User exist in database
+exports.checkUser = async (req, res) => {
+  const { email } = req.body;
   try {
-    //find user by email
+    // Find user by email
     const user = await User.findOne({ email });
 
-    if(!user){
+    if (!user) {
       return res.status(401).json({ message: 'User not found' });
     }
-    user.password = password
-    await user.save()
 
-    // res.json({user});
-
-    // Optionally, you can generate a new JWT token or just send a success response
-    res.json({ message: 'Password reset successful' });
+    // If user is found, respond with a success message
+    res.json({ message: 'User found' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
-}
+};
 
+//reset password
+exports.resetPassword = async (req, res) => {
+  const { email, oldPassword, newPassword } = req.body;
+
+  try {
+    // Find user by email
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ message: 'User not found' });
+    }
+
+    // Validate old password
+    const isMatch = await user.matchPassword(oldPassword);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Old password is incorrect' });
+    }
+
+    // Update to the new password
+    user.password = newPassword; // This will be hashed before saving due to the pre-save hook
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+//logout user
 exports.logoutUser = (req, res) => {
 
   res.cookie('jwt', '', {
@@ -81,10 +108,9 @@ exports.logoutUser = (req, res) => {
   res.status(200).json({ message: 'Logged out successfully'});
 };
 
-//reset password
 // Verify OTP and Reset Password
 exports.verifyOtpAndResetPassword = async (req, res) => {
-  const {email, otp} = req.body;
+  const {email, otp, newPassword} = req.body;
 
   try {
     const user = await User.findOne({ email });
@@ -95,9 +121,13 @@ exports.verifyOtpAndResetPassword = async (req, res) => {
 
     // Check if OTP is valid
     if (user.otp !== otp || user.otpExpiry < Date.now()) {
+      console.log(user.otp)
+      console.log(user.otpExpiry)
+      console.log(Date.now())
+
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
-
+    user.password = newPassword
     // Update password
     // user.password = newPassword;
     user.otp = undefined;  // Clear OTP after successful reset
@@ -155,4 +185,3 @@ exports.forgotPassword = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
